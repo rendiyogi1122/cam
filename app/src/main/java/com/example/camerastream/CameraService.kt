@@ -18,13 +18,14 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.util.Log
-import com.sun.net.httpserver.HttpServer
 import java.io.ByteArrayOutputStream
-import java.net.InetSocketAddress
+import java.io.OutputStream
+import java.net.ServerSocket
+import java.net.Socket
 import java.nio.ByteBuffer
 
 class CameraService : Service() {
-    private var httpServer: HttpServer? = null
+    private var serverSocket: ServerSocket? = null
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
     private var imageReader: ImageReader? = null
@@ -32,6 +33,7 @@ class CameraService : Service() {
     private var handler: Handler? = null
     private var latestFrame: ByteArray? = null
     private val lock = Any()
+    private var isRunning = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createNotificationChannel()
@@ -58,14 +60,14 @@ class CameraService : Service() {
             Notification.Builder(this, "camera_stream")
                 .setContentTitle("Camera Stream")
                 .setContentText("Streaming camera...")
-                .setSmallIcon(android.R.drawable.ic_dialog_camera)
+                .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .build()
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
                 .setContentTitle("Camera Stream")
                 .setContentText("Streaming camera...")
-                .setSmallIcon(android.R.drawable.ic_dialog_camera)
+                .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .build()
         }
     }
@@ -111,7 +113,7 @@ class CameraService : Service() {
         val outputs = listOf(imageReader!!.surface)
         val request = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
             addTarget(imageReader!!.surface)
-            set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_AUTO)
+            set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO)
         }.build()
 
         try {
@@ -170,34 +172,59 @@ class CameraService : Service() {
     }
 
     private fun startHttpServer() {
-        try {
-            httpServer = HttpServer.create(InetSocketAddress(8080), 0).apply {
-                createContext("/stream") { exchange ->
-                    exchange.responseHeaders["Content-Type"] = "image/jpeg"
-                    exchange.responseHeaders["Connection"] = "close"
-                    synchronized(lock) {
-                        val frame = latestFrame
-                        if (frame != null) {
-                            exchange.sendResponseHeaders(200, frame.size.toLong())
-                            exchange.responseBody.write(frame)
-                        } else {
-                            exchange.sendResponseHeaders(204, 0)
-                        }
-                    }
-                    exchange.close()
-                }
-                setExecutor(null)
-                start()
+        isRunning = true
+        Thread {
+            try {
+                serverSocket = ServerSocket(8080)
                 Log.d("CameraService", "HTTP Server started on port 8080")
+                while (isRunning) {
+                    val client = serverSocket?.accept() ?: break
+                    Thread { handleClient(client) }.start()
+                }
+            } catch (e: Exception) {
+                Log.e("CameraService", "HTTP Server error", e)
+            }
+        }.start()
+    }
+
+    private fun handleClient(socket: Socket) {
+        try {
+            val input = socket.getInputStream()
+            val output = socket.getOutputStream()
+            val buffer = ByteArray(1024)
+            input.read(buffer) // read request (ignore)
+
+            val responseHeader = "HTTP/1.1 200 OK\r\n" +
+                    "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n" +
+                    "Connection: close\r\n\r\n"
+            output.write(responseHeader.toByteArray())
+
+            while (isRunning && !socket.isClosed) {
+                synchronized(lock) {
+                    val frame = latestFrame
+                    if (frame != null) {
+                        val frameHeader = "--frame\r\n" +
+                                "Content-Type: image/jpeg\r\n" +
+                                "Content-Length: ${frame.size}\r\n\r\n"
+                        output.write(frameHeader.toByteArray())
+                        output.write(frame)
+                        output.write("\r\n".toByteArray())
+                        output.flush()
+                    }
+                }
+                Thread.sleep(100) // ~10 fps
             }
         } catch (e: Exception) {
-            Log.e("CameraService", "HTTP Server error", e)
+            Log.e("CameraService", "Client handling error", e)
+        } finally {
+            try { socket.close() } catch (e: Exception) {}
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        httpServer?.stop(0)
+        isRunning = false
+        try { serverSocket?.close() } catch (e: Exception) {}
         captureSession?.close()
         cameraDevice?.close()
         imageReader?.close()
