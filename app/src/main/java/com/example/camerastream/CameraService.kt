@@ -190,9 +190,32 @@ class CameraService : Service() {
             }
         }
 
+        val originalWidth = image.width
+        val originalHeight = image.height
+
+        val nv21Rotated = ByteArray(ySize + uvSize)
+        val yRowStride = originalWidth
+        val uvRowStride = originalWidth
+        val uvPixelStride = 2
+
+        for (y in 0 until originalHeight) {
+            for (x in 0 until originalWidth) {
+                val newYX = x * originalHeight + (originalHeight - 1 - y)
+                val oldYX = y * yRowStride + x
+                nv21Rotated[newYX] = nv21[oldYX]
+
+                if (y % 2 == 0 && x % 2 == 0) {
+                    val oldUVIndex = ySize + y * uvRowStride + x
+                    val newUVIndex = ySize + x * originalHeight + (originalHeight - 1 - y)
+                    nv21Rotated[newUVIndex] = nv21[oldUVIndex]
+                    nv21Rotated[newUVIndex + 1] = nv21[oldUVIndex + 1]
+                }
+            }
+        }
+
         val out = ByteArrayOutputStream()
-        android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, image.width, image.height, null).compressToJpeg(
-            android.graphics.Rect(0, 0, image.width, image.height), 80, out
+        android.graphics.YuvImage(nv21Rotated, android.graphics.ImageFormat.NV21, originalHeight, originalWidth, null).compressToJpeg(
+            android.graphics.Rect(0, 0, originalHeight, originalWidth), 80, out
         )
         return out.toByteArray()
     }
