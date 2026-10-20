@@ -113,7 +113,7 @@ class CameraService : Service() {
         val outputs = listOf(imageReader!!.surface)
         val request = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
             addTarget(imageReader!!.surface)
-            set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON_AUTO)
+            set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
         }.build()
 
         try {
