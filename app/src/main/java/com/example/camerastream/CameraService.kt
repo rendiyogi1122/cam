@@ -254,63 +254,64 @@ class CameraService : Service() {
                 output.write(responseHeader.toByteArray())
                 output.flush()
 
-            var frameSent = false
-            while (isRunning && !socket.isClosed) {
-                synchronized(lock) {
-                    val frame = latestFrame
-                    if (frame != null) {
-                        val frameHeader = "--frame\r\n" +
-                                "Content-Type: image/jpeg\r\n" +
-                                "Content-Length: ${frame.size}\r\n\r\n"
-                        output.write(frameHeader.toByteArray())
-                        output.write(frame)
-                        output.write("\r\n".toByteArray())
-                        output.flush()
-                        frameSent = true
-                    } else if (!frameSent) {
-                        Log.w(TAG, "Waiting for first frame...")
+                var frameSent = false
+                while (isRunning && !socket.isClosed) {
+                    synchronized(lock) {
+                        val frame = latestFrame
+                        if (frame != null) {
+                            val frameHeader = "--frame\r\n" +
+                                    "Content-Type: image/jpeg\r\n" +
+                                    "Content-Length: ${frame.size}\r\n\r\n"
+                            output.write(frameHeader.toByteArray())
+                            output.write(frame)
+                            output.write("\r\n".toByteArray())
+                            output.flush()
+                            frameSent = true
+                        } else if (!frameSent) {
+                            Log.w(TAG, "Waiting for first frame...")
+                        }
                     }
+                    Thread.sleep(100) // ~10 fps
                 }
-                Thread.sleep(100) // ~10 fps
+                try { socket.close() } catch (e: Exception) {}
+                return
             }
-            return
-        }
 
-        // Serve HTML page for GET / (or any other path)
-        val html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Camera Stream</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <style>
-                    body { font-family: sans-serif; text-align: center; margin: 20px; }
-                    img { max-width: 100%; height: auto; border: 1px solid #ccc; }
-                    button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin-top: 20px; }
-                </style>
-            </head>
-            <body>
-                <h1>Camera Stream</h1>
-                <img src="/stream" alt="Camera Stream">
-                <br>
-                <button onclick="switchCamera()">Switch Camera</button>
-                <script>
-                    function switchCamera() {
-                        fetch('/switch-camera', { method: 'POST' })
-                            .then(r => r.text())
-                            .then(msg => console.log(msg))
-                            .catch(e => console.error(e));
-                    }
-                </script>
-            </body>
-            </html>
-        """.trimIndent()
-        val responseHeader = "HTTP/1.1 200 OK\r\n" +
-                "Content-Type: text/html; charset=utf-8\r\n" +
-                "Content-Length: ${html.length}\r\n" +
-                "Connection: close\r\n\r\n"
-        output.write(responseHeader.toByteArray())
-        output.write(html.toByteArray())
+            // Serve HTML page for GET / (or any other path)
+            val html = """
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Camera Stream</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1">
+                    <style>
+                        body { font-family: sans-serif; text-align: center; margin: 20px; }
+                        img { max-width: 100%; height: auto; border: 1px solid #ccc; }
+                        button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin-top: 20px; }
+                    </style>
+                </head>
+                <body>
+                    <h1>Camera Stream</h1>
+                    <img src="/stream" alt="Camera Stream">
+                    <br>
+                    <button onclick="switchCamera()">Switch Camera</button>
+                    <script>
+                        function switchCamera() {
+                            fetch('/switch-camera', { method: 'POST' })
+                                .then(r => r.text())
+                                .then(msg => console.log(msg))
+                                .catch(e => console.error(e));
+                        }
+                    </script>
+                </body>
+                </html>
+            """.trimIndent()
+            val responseHeader = "HTTP/1.1 200 OK\r\n" +
+                    "Content-Type: text/html; charset=utf-8\r\n" +
+                    "Content-Length: ${html.length}\r\n" +
+                    "Connection: close\r\n\r\n"
+            output.write(responseHeader.toByteArray())
+            output.write(html.toByteArray())
         } catch (e: Exception) {
             Log.e(TAG, "Client handling error", e)
         } finally {
