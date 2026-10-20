@@ -1,0 +1,194 @@
+=== CAMERA STREAM APP - LOG PENGEMBANGAN ===
+Dibuat: Oktober 2026
+Repository: https://github.com/rendiyogi1122/cam
+
+=== TUJUAN APLIKASI ===
+Streaming video MJPEG real-time dari kamera Android ke browser PC via HTTP port 8080.
+User bisa switch kamera depan/belakang via tombol di halaman web.
+
+=== TEKNOLOGI & STACK ===
+- Bahasa: Kotlin
+- Min SDK: 24 (Android 7.0)
+- Target SDK: 34 (Android 14)
+- Build Tool: Gradle 8.2, AGP 8.2.1, Kotlin 1.9.24
+- Camera API: Camera2 (android.hardware.camera2)
+- HTTP Server: ServerSocket native Java (port 8080)
+- Foreground Service: FOREGROUND_SERVICE_CAMERA type
+- CI/CD: GitHub Actions (build APK otomatis)
+
+=== STRUKTUR FILE PENTING ===
+
+1. AndroidManifest.xml
+   - Permission: CAMERA, INTERNET, FOREGROUND_SERVICE, FOREGROUND_SERVICE_CAMERA, POST_NOTIFICATIONS
+   - Service: CameraService dengan foregroundServiceType="camera"
+
+2. MainActivity.kt
+   - Request permission CAMERA dan POST_NOTIFICATIONS (API 33+)
+   - Button START: start CameraService via startForegroundService()
+   - Button STOP: stop CameraService
+   - Display IP address: getLocalIpAddress() via NetworkInterface.getNetworkInterfaces()
+
+3. CameraService.kt
+   - onStartCommand: buat notification channel, start foreground, start camera, start HTTP server
+   - startCameraCapture: Camera2 API, pilih kamera based on currentCameraFacing (LENS_FACING_BACK default)
+   - yuvToJpeg: convert YUV_420_888 → NV21 → JPEG → rotate 90° → latestFrame
+   - startHttpServer: ServerSocket port 8080, accept client di thread terpisah
+   - handleClient: 
+     * POST /switch-camera → switchCamera()
+     * GET /stream → serve MJPEG multipart stream (boundary=frame, ~10 fps)
+     * GET / (atau path lain) → serve HTML page dengan <img src="/stream"> dan tombol switch camera
+   - switchCamera: close current camera, toggle currentCameraFacing, start capture ulang
+
+4. build.gradle (app level)
+   - compileSdk 34, minSdk 24, targetSdk 34
+   - JVM target 17
+   - Dependencies: androidx.core, appcompat, constraintlayout
+
+5. .github/workflows/build.yml
+   - CI/CD: checkout code, setup JDK 17, setup Gradle, build APK, upload artifact
+
+=== MASALAH YANG SUDAH DIPERBAIKI ===
+
+1. MASALAH: Stream tidak muncul di browser, hanya HTML page yang muncul
+   PENYEBAB: Path routing salah, GET /stream masuk ke HTML block
+   SOLUSI: Pisahkan if-else yang jelas: 
+           - GET /stream → return setelah loop streaming
+           - POST /switch-camera → return setelah response
+           - GET / atau path lain → serve HTML
+
+2. MASALAH: Duplicate uvPixelStride di yuvToJpeg
+   PENYEBAB: Copy-paste error
+   SOLUSI: Hapus line duplikat
+
+3. MASALAH: Rotation gambar portrait salah
+   PENYEBAB: Sensor image raw adalah landscape
+   SOLUSI: Rotate 90° setelah decode JPEG via Matrix.postRotate(90f)
+
+4. MASALAH: Tombol switch camera tidak muncul
+   PENYEBAB: HTML tidak di-serve karena path routing return sebelum HTML block
+   SOLUSI: Tambah explicit return setelah stream block, HTML jadi fallback untuk GET /
+
+=== CARA KERJA HTTP SERVER ===
+
+handleClient logic:
+1. Read HTTP request header dari socket
+2. Parse request line (contoh: "GET /stream HTTP/1.1")
+3. Branch:
+   - Jika "POST /switch-camera" → call switchCamera(), return 200 plain text
+   - Jika "GET /stream" → send MJPEG header, loop kirim frame (boundary --frame), return setelah loop
+   - Lainnya → send HTML page dengan <img src="/stream"> dan button switch camera
+
+MJPEG format:
+```
+HTTP/1.1 200 OK
+Content-Type: multipart/x-mixed-replace; boundary=frame
+Connection: keep-alive
+
+--frame
+Content-Type: image/jpeg
+Content-Length: 12345
+
+<JPEG binary data>
+
+--frame
+Content-Type: image/jpeg
+Content-Length: 12346
+
+<JPEG binary data>
+
+...
+```
+
+=== CARA TEST ===
+
+1. Build APK:
+   - Push ke GitHub → GitHub Actions build otomatis
+   - Download APK dari workflow artifacts
+   - Atau local: ./gradlew assembleDebug
+
+2. Install APK:
+   adb install app/build/outputs/apk/debug/app-debug.apk
+
+3. Jalankan app:
+   - Beri permission CAMERA (dan POST_NOTIFICATIONS jika Android 13+)
+   - Tap START
+   - Catat IP address yang muncul (contoh: 192.168.0.101)
+
+4. Test dari PC browser:
+   - Stream: http://192.168.0.101:8080/stream
+   - Control page: http://192.168.0.101:8080/
+   - Switch camera: click tombol "Switch Camera" di web page
+
+5. Check logcat:
+   adb logcat -s CameraService:* MainActivity:*
+   - "Camera opened" → camera berhasil capture
+   - "Frame captured, size=X" → frame tersedia
+   - "HTTP Server started on port 8080" → server jalan
+
+=== KNOWN SHORTCUTS (PONYTAIL MODE) ===
+
+1. Frame rate hard-coded 10 fps (Thread.sleep(100))
+   - Upgrade: tambahkan config FPS via SharedPreferences atau Intent extra
+
+2. JPEG quality hard-coded 80
+   - Upgrade: tambahkan quality slider di MainActivity
+
+3. Image resolution pakai first available size dari camera
+   - Upgrade: tambahkan pilihan resolusi (480p, 720p, 1080p)
+
+4. Tidak ada HTTPS/TLS
+   - Upgrade: tambahkan self-signed cert atau Let's Encrypt mobile
+
+5. Tidak ada authentication
+   - Upgrade: tambahkan basic auth atau token di HTTP header
+
+6. Single client stream (socket langsung dikirim frame)
+   - Upgrade: tambahkan broadcast ke multiple client via CopyOnWriteArrayList
+
+=== TIPS UPDATE APLIKASI ===
+
+1. Tambah fitur baru camera effect (misal: grayscale, sepia):
+   - Edit yuvToJpeg() sebelum return: apply ColorMatrix filter ke bitmap
+
+2. Tambah audio streaming:
+   - Pakai MediaRecorder atau AudioRecord
+   - Combine dengan video jadi container MP4 atau WebM (MediaMuxer)
+
+3. Ubah dari MJPEG ke H.264/H.265:
+   - Pakai MediaCodec untuk encode
+   - Serve via RTSP atau WebRTC (lebih kompleks, butuh library tambahan)
+
+4. Tambah rekam video ke storage:
+   - Pakai MediaRecorder dengan output file path
+   - Request permission WRITE_EXTERNAL_STORAGE (API <29) atau MediaStore (API 29+)
+
+5. Optimize battery:
+   - Reduce FPS saat screen off (registerReceiver ACTION_SCREEN_OFF)
+   - Pakai partial wake lock atau PowerManager
+
+=== COMMIT HISTORY (PENTING) ===
+
+0b38dfb - Fix rotation 90 degree untuk landscape→portrait
+c3c85dd - Tambah camera icon launcher (Material Symbols)
+06af5b4 - Fix duplicate uvPixelStride di yuvToJpeg
+2100424 - Tambah camera switch via POST /switch-camera
+970bc9b - Fix stopCameraCapture unresolved reference
+14b5500 - Fix HTTP path routing: stream vs HTML page
+cfbd7e4 - Fix proper if-else for /stream vs HTML paths (tombol switch muncul)
+
+=== REFERENSI EXTERNAL ===
+
+- Camera2 API guide: https://developer.android.com/training/camera2
+- MJPEG format spec: https://en.wikipedia.org/wiki/Motion_JPEG
+- Foreground service: https://developer.android.com/guide/components/foreground-services
+
+=== KONTAK & DEPLOYMENT ===
+
+- GitHub repo: https://github.com/rendiyogi1122/cam
+- Build status: https://github.com/rendiyogi1122/cam/actions
+- Download APK: dari workflow artifacts (klik workflow run terbaru)
+
+---
+File ini dibuat untuk memudahkan AI agent atau programmer junior memahami 
+aplikasi dan melakukan update/bugfix di masa depan. Baca file ini dulu 
+sebelum modifikasi code.
