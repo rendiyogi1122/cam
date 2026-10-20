@@ -315,7 +315,9 @@ class CameraService : Service() {
 
     private fun switchCamera() {
         Log.d(TAG, "Switching camera")
-        stopCameraCapture()
+        captureSession?.close()
+        cameraDevice?.close()
+        imageReader?.close()
         currentCameraFacing = if (currentCameraFacing == CameraCharacteristics.LENS_FACING_FRONT) {
             CameraCharacteristics.LENS_FACING_BACK
         } else {
