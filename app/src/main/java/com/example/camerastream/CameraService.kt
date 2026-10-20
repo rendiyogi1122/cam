@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.ImageFormat
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
@@ -18,6 +19,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.util.Log
+import android.util.Size
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.net.ServerSocket
@@ -34,10 +36,20 @@ class CameraService : Service() {
     private var latestFrame: ByteArray? = null
     private val lock = Any()
     private var isRunning = false
+    private val TAG = "CameraService"
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand")
         createNotificationChannel()
-        startForeground(1, createNotification())
+        val notification = createNotification()
+        startForeground(1, notification)
+        
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Camera permission not granted")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        
         startCameraCapture()
         startHttpServer()
         return START_STICKY
@@ -59,80 +71,95 @@ class CameraService : Service() {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, "camera_stream")
                 .setContentTitle("Camera Stream")
-                .setContentText("Streaming camera...")
+                .setContentText("Streaming camera on port 8080")
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .build()
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
                 .setContentTitle("Camera Stream")
-                .setContentText("Streaming camera...")
+                .setContentText("Streaming camera on port 8080")
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .build()
         }
     }
 
     private fun startCameraCapture() {
+        Log.d(TAG, "Starting camera capture")
         handlerThread = HandlerThread("CameraBackground").apply { start() }
         handler = Handler(handlerThread!!.looper)
 
         val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
-        val cameraId = cameraManager.cameraIdList[0]
-
-        imageReader = ImageReader.newInstance(640, 480, ImageFormat.YUV_420_888, 2).apply {
-            setOnImageAvailableListener({ reader ->
-                val image = reader.acquireLatestImage()
-                if (image != null) {
-                    latestFrame = yuvToJpeg(image)
-                    image.close()
-                }
-            }, handler)
-        }
-
         try {
+            val cameraId = cameraManager.cameraIdList.firstOrNull() 
+                ?: run { Log.e(TAG, "No camera found"); return }
+            
+            val characteristics = cameraManager.getCameraCharacteristics(cameraId)
+            val streamConfigMap = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            val size = streamConfigMap?.getOutputSizes(ImageFormat.YUV_420_888)?.firstOrNull() 
+                ?: Size(640, 480)
+
+            imageReader = ImageReader.newInstance(size.width, size.height, ImageFormat.YUV_420_888, 2).apply {
+                setOnImageAvailableListener({ reader ->
+                    val image = reader.acquireLatestImage()
+                    if (image != null) {
+                        try {
+                            latestFrame = yuvToJpeg(image)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "YUV to JPEG failed", e)
+                        } finally {
+                            image.close()
+                        }
+                    }
+                }, handler)
+            }
+
             cameraManager.openCamera(cameraId, object : CameraDevice.StateCallback() {
                 override fun onOpened(camera: CameraDevice) {
+                    Log.d(TAG, "Camera opened")
                     cameraDevice = camera
                     createCaptureSession()
                 }
 
                 override fun onDisconnected(camera: CameraDevice) {
+                    Log.w(TAG, "Camera disconnected")
                     cameraDevice = null
                 }
 
                 override fun onError(camera: CameraDevice, error: Int) {
-                    Log.e("CameraService", "Camera error: $error")
+                    Log.e(TAG, "Camera error: $error")
                 }
             }, handler)
-        } catch (e: SecurityException) {
-            Log.e("CameraService", "Camera permission denied", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "Camera setup failed", e)
         }
     }
 
     private fun createCaptureSession() {
-        val outputs = listOf(imageReader!!.surface)
-        val request = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
-            addTarget(imageReader!!.surface)
-            set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
-        }.build()
-
         try {
+            val outputs = listOf(imageReader!!.surface)
+            val request = cameraDevice!!.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                addTarget(imageReader!!.surface)
+                set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+            }.build()
+
             cameraDevice!!.createCaptureSession(outputs, object : CameraCaptureSession.StateCallback() {
                 override fun onConfigured(session: CameraCaptureSession) {
+                    Log.d(TAG, "Capture session configured")
                     captureSession = session
                     try {
                         session.setRepeatingRequest(request, null, handler)
                     } catch (e: Exception) {
-                        Log.e("CameraService", "Capture request failed", e)
+                        Log.e(TAG, "Capture request failed", e)
                     }
                 }
 
                 override fun onConfigureFailed(session: CameraCaptureSession) {
-                    Log.e("CameraService", "Session config failed")
+                    Log.e(TAG, "Session config failed")
                 }
             }, handler)
         } catch (e: Exception) {
-            Log.e("CameraService", "Create session failed", e)
+            Log.e(TAG, "Create session failed", e)
         }
     }
 
@@ -164,7 +191,6 @@ class CameraService : Service() {
         }
 
         val out = ByteArrayOutputStream()
-        val bitmap = android.graphics.Bitmap.createBitmap(image.width, image.height, android.graphics.Bitmap.Config.ARGB_8888)
         android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, image.width, image.height, null).compressToJpeg(
             android.graphics.Rect(0, 0, image.width, image.height), 80, out
         )
@@ -176,13 +202,14 @@ class CameraService : Service() {
         Thread {
             try {
                 serverSocket = ServerSocket(8080)
-                Log.d("CameraService", "HTTP Server started on port 8080")
+                serverSocket?.setReuseAddress(true)
+                Log.d(TAG, "HTTP Server started on port 8080")
                 while (isRunning) {
                     val client = serverSocket?.accept() ?: break
                     Thread { handleClient(client) }.start()
                 }
             } catch (e: Exception) {
-                Log.e("CameraService", "HTTP Server error", e)
+                Log.e(TAG, "HTTP Server error", e)
             }
         }.start()
     }
@@ -198,6 +225,7 @@ class CameraService : Service() {
                     "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n" +
                     "Connection: close\r\n\r\n"
             output.write(responseHeader.toByteArray())
+            output.flush()
 
             while (isRunning && !socket.isClosed) {
                 synchronized(lock) {
@@ -215,13 +243,14 @@ class CameraService : Service() {
                 Thread.sleep(100) // ~10 fps
             }
         } catch (e: Exception) {
-            Log.e("CameraService", "Client handling error", e)
+            Log.e(TAG, "Client handling error", e)
         } finally {
             try { socket.close() } catch (e: Exception) {}
         }
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "onDestroy")
         super.onDestroy()
         isRunning = false
         try { serverSocket?.close() } catch (e: Exception) {}

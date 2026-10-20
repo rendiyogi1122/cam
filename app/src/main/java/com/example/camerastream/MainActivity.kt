@@ -96,8 +96,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateIpAddress() {
-        val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
-        val ip = Formatter.formatIpAddress(wifiManager.connectionInfo.ipAddress)
-        tvIpAddress.text = "Open in PC browser:\nhttp://$ip:8080"
+        val ip = getLocalIpAddress()
+        tvIpAddress.text = "Open in PC browser:\nhttp://$ip:8080/stream"
+    }
+
+    private fun getLocalIpAddress(): String {
+        try {
+            for (iface in java.net.NetworkInterface.getNetworkInterfaces()) {
+                if (iface.isUp && !iface.isLoopback) {
+                    for (addr in iface.inetAddresses) {
+                        if (addr is java.net.Inet4Address) {
+                            return addr.hostAddress
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return "IP not found"
     }
 }
