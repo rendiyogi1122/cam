@@ -34,6 +34,7 @@ class CameraService : Service() {
     private var handlerThread: HandlerThread? = null
     private var handler: Handler? = null
     private var latestFrame: ByteArray? = null
+    private var currentCameraFacing: Int = CameraCharacteristics.LENS_FACING_BACK
     private val lock = Any()
     private var isRunning = false
     private val TAG = "CameraService"
@@ -91,7 +92,10 @@ class CameraService : Service() {
 
         val cameraManager = getSystemService(CAMERA_SERVICE) as CameraManager
         try {
-            val cameraId = cameraManager.cameraIdList.firstOrNull() 
+            val cameraId = cameraManager.cameraIdList.firstOrNull { id ->
+                val characteristics = cameraManager.getCameraCharacteristics(id)
+                characteristics.get(CameraCharacteristics.LENS_FACING) == currentCameraFacing
+            } ?: cameraManager.cameraIdList.firstOrNull()
                 ?: run { Log.e(TAG, "No camera found"); return }
             
             val characteristics = cameraManager.getCameraCharacteristics(cameraId)
@@ -230,8 +234,57 @@ class CameraService : Service() {
             val input = socket.getInputStream()
             val output = socket.getOutputStream()
             val buffer = ByteArray(1024)
-            input.read(buffer) // read request (ignore)
+            val bytesRead = input.read(buffer)
+            if (bytesRead == -1) return
+            val request = String(buffer, 0, bytesRead)
 
+            // Handle camera switch command
+            if (request.startsWith("POST /switch-camera")) {
+                switchCamera()
+                output.write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nCamera switched".toByteArray())
+                return
+            }
+
+            // Serve HTML page for GET /
+            if (request.startsWith("GET /")) {
+                val html = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Camera Stream</title>
+                        <meta name="viewport" content="width=device-width, initial-scale=1">
+                        <style>
+                            body { font-family: sans-serif; text-align: center; margin: 20px; }
+                            img { max-width: 100%; height: auto; border: 1px solid #ccc; }
+                            button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin-top: 20px; }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>Camera Stream</h1>
+                        <img src="/stream" alt="Camera Stream">
+                        <br>
+                        <button onclick="switchCamera()">Switch Camera</button>
+                        <script>
+                            function switchCamera() {
+                                fetch('/switch-camera', { method: 'POST' })
+                                    .then(r => r.text())
+                                    .then(msg => console.log(msg))
+                                    .catch(e => console.error(e));
+                            }
+                        </script>
+                    </body>
+                    </html>
+                """.trimIndent()
+                val responseHeader = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: text/html; charset=utf-8\r\n" +
+                        "Content-Length: ${html.length}\r\n" +
+                        "Connection: close\r\n\r\n"
+                output.write(responseHeader.toByteArray())
+                output.write(html.toByteArray())
+                return
+            }
+
+            // Stream MJPEG for /stream
             val responseHeader = "HTTP/1.1 200 OK\r\n" +
                     "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n" +
                     "Connection: close\r\n\r\n"
@@ -258,6 +311,17 @@ class CameraService : Service() {
         } finally {
             try { socket.close() } catch (e: Exception) {}
         }
+    }
+
+    private fun switchCamera() {
+        Log.d(TAG, "Switching camera")
+        stopCameraCapture()
+        currentCameraFacing = if (currentCameraFacing == CameraCharacteristics.LENS_FACING_FRONT) {
+            CameraCharacteristics.LENS_FACING_BACK
+        } else {
+            CameraCharacteristics.LENS_FACING_FRONT
+        }
+        startCameraCapture()
     }
 
     override fun onDestroy() {
