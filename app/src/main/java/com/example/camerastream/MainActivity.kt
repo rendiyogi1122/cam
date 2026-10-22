@@ -22,7 +22,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
     private var deviceId: String = ""
-    private lateinit var supabase: SupabaseClient
+    private lateinit var supabase: SupabaseInterface
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,10 +40,7 @@ class MainActivity : AppCompatActivity() {
             supabase = SupabaseClient(supabaseUrl, supabaseKey)
         } else {
             // Fallback: dummy client that does nothing (for dev without config)
-            supabase = object : SupabaseClient("", "") {
-                override fun startStream(deviceId: String, onResult: (Boolean, String?) -> Unit) { onResult(true, null) }
-                override fun stopStream(deviceId: String, onResult: (Boolean, String?) -> Unit) { onResult(true, null) }
-            }
+            supabase = DummySupabaseClient()
         }
 
         checkPermissions()
