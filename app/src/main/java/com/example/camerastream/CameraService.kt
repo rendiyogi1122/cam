@@ -23,8 +23,6 @@ import android.util.Size
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
 
 class CameraService : Service() {
     private val RELAY_URL = "https://camera-relay-k2yn.onrender.com/upload-frame"
@@ -34,10 +32,10 @@ class CameraService : Service() {
     private var handlerThread: HandlerThread? = null
     private var handler: Handler? = null
     private var latestFrame: ByteArray? = null
+    private var lastUploadedFrame: ByteArray? = null
     private var currentCameraFacing: Int = CameraCharacteristics.LENS_FACING_BACK
     private val lock = Any()
     private var isRunning = false
-    private val uploader: ExecutorService = Executors.newSingleThreadExecutor()
     private val TAG = "CameraService"
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -109,7 +107,9 @@ class CameraService : Service() {
                     val image = reader.acquireLatestImage()
                     if (image != null) {
                         try {
-                            latestFrame = yuvToJpeg(image)
+                            synchronized(lock) {
+                                latestFrame = yuvToJpeg(image)
+                            }
                             Log.d(TAG, "Frame captured, size=${latestFrame?.size}")
                         } catch (e: Exception) {
                             Log.e(TAG, "YUV to JPEG failed", e)
@@ -211,12 +211,12 @@ class CameraService : Service() {
                 while (isRunning) {
                     synchronized(lock) {
                         val frame = latestFrame
-                        if (frame != null) {
-                            // Upload async, tidak blok loop capture
-                            uploader.execute { uploadFrame(frame) }
+                        if (frame != null && frame != lastUploadedFrame) {
+                            lastUploadedFrame = frame
+                            uploadFrame(frame) // Upload sync: frame lama hilang, tidak numpuk
                         }
                     }
-                    Thread.sleep(100) // ~10 fps
+                    Thread.sleep(200) // ~5 fps, lebih stabil
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Frame uploader error", e)
@@ -268,7 +268,6 @@ class CameraService : Service() {
         Log.d(TAG, "onDestroy")
         super.onDestroy()
         isRunning = false
-        uploader.shutdown()
         captureSession?.close()
         cameraDevice?.close()
         imageReader?.close()
