@@ -198,7 +198,7 @@ class CameraService : Service() {
 
         val out = ByteArrayOutputStream()
         android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, image.width, image.height, null).compressToJpeg(
-            android.graphics.Rect(0, 0, image.width, image.height), 35, out  // Quality lebih rendah, file lebih kecil
+            android.graphics.Rect(0, 0, image.width, image.height), 20, out  // Quality lebih rendah, file lebih kecil
         )
         return out.toByteArray()
     }
@@ -215,7 +215,7 @@ class CameraService : Service() {
                             uploadFrame(frame) // Upload sync: frame lama hilang, tidak numpuk
                         }
                     }
-                    Thread.sleep(200) // ~5 fps, lebih stabil
+                    Thread.sleep(0) // Upload secepat mungkin, frame dedup cegah overload
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Frame uploader error", e)
