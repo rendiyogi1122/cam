@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvStatus: TextView
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
+    private var deviceId: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,7 +76,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val intent = Intent(this, CameraService::class.java)
+        // Generate unique device ID (6 chars)
+        deviceId = (0..5).map { "0123456789ABCDEF"[Math.random().toInt() * 16] }.joinToString("")
+
+        val intent = Intent(this, CameraService::class.java).apply {
+            putExtra("device_id", deviceId)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
         } else {
@@ -93,9 +99,14 @@ class MainActivity : AppCompatActivity() {
         btnStart.isEnabled = true
         btnStop.isEnabled = false
         tvStatus.text = "Stream Stopped"
+        deviceId = ""
     }
 
     private fun updateRelayUrl() {
-        tvIpAddress.text = "Open in PC browser:\nhttps://camera-relay-k2yn.onrender.com/stream"
+        if (deviceId.isNotEmpty()) {
+            tvIpAddress.text = "Open in PC browser:\nhttps://camera-relay-k2yn.onrender.com/stream/$deviceId"
+        } else {
+            tvIpAddress.text = "Open in PC browser:\nhttps://camera-relay-k2yn.onrender.com/stream"
+        }
     }
 }

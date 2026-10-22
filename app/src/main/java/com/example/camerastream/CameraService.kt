@@ -25,7 +25,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class CameraService : Service() {
-    private val RELAY_URL = "https://camera-relay-k2yn.onrender.com/upload-frame"
+    private val RELAY_BASE = "https://camera-relay-k2yn.onrender.com"
+    private var deviceId: String = ""
+    private var relayUrl: String = ""
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
     private var imageReader: ImageReader? = null
@@ -40,6 +42,12 @@ class CameraService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand")
+        
+        // Get device ID from intent
+        deviceId = intent?.getStringExtra("device_id") ?: java.util.UUID.randomUUID().toString().take(6)
+        relayUrl = "$RELAY_BASE/upload-frame/$deviceId"
+        Log.d(TAG, "Device ID: $deviceId, Relay URL: $relayUrl")
+        
         createNotificationChannel()
         val notification = createNotification()
         startForeground(1, notification)
