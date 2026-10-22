@@ -198,7 +198,7 @@ class CameraService : Service() {
 
         val out = ByteArrayOutputStream()
         android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, image.width, image.height, null).compressToJpeg(
-            android.graphics.Rect(0, 0, image.width, image.height), 50, out  // Quality lebih rendah, file lebih kecil
+            android.graphics.Rect(0, 0, image.width, image.height), 35, out  // Quality lebih rendah, file lebih kecil
         )
         return out.toByteArray()
     }
