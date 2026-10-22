@@ -233,7 +233,7 @@ class CameraService : Service() {
 
     private fun uploadFrame(frame: ByteArray) {
         try {
-            val url = URL(RELAY_URL)
+            val url = URL(relayUrl)
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "image/jpeg")
