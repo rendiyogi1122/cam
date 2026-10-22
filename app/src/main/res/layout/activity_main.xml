@@ -18,7 +18,7 @@
         android:id="@+id/tvIpAddress"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="IP: -"
+        android:text="Open in PC browser:"
         android:textSize="14sp"
         android:layout_marginBottom="32dp" />
 

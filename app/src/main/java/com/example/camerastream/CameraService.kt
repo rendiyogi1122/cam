@@ -21,13 +21,11 @@ import android.os.IBinder
 import android.util.Log
 import android.util.Size
 import java.io.ByteArrayOutputStream
-import java.io.OutputStream
-import java.net.ServerSocket
-import java.net.Socket
-import java.nio.ByteBuffer
+import java.net.HttpURLConnection
+import java.net.URL
 
 class CameraService : Service() {
-    private var serverSocket: ServerSocket? = null
+    private val RELAY_URL = "https://your-app.onrender.com/upload-frame"  // TODO: Ganti setelah deploy
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
     private var imageReader: ImageReader? = null
@@ -52,7 +50,7 @@ class CameraService : Service() {
         }
         
         startCameraCapture()
-        startHttpServer()
+        startFrameUploader()
         return START_STICKY
     }
 
@@ -213,109 +211,50 @@ class CameraService : Service() {
         return rotatedOut.toByteArray()
     }
 
-    private fun startHttpServer() {
+    private fun startFrameUploader() {
         isRunning = true
         Thread {
             try {
-                serverSocket = ServerSocket(8080)
-                serverSocket?.setReuseAddress(true)
-                Log.d(TAG, "HTTP Server started on port 8080")
                 while (isRunning) {
-                    val client = serverSocket?.accept() ?: break
-                    Thread { handleClient(client) }.start()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "HTTP Server error", e)
-            }
-        }.start()
-    }
-
-    private fun handleClient(socket: Socket) {
-        try {
-            val input = socket.getInputStream()
-            val output = socket.getOutputStream()
-            val buffer = ByteArray(1024)
-            val bytesRead = input.read(buffer)
-            if (bytesRead == -1) return
-            val request = String(buffer, 0, bytesRead)
-
-            // Handle camera switch command
-            if (request.startsWith("POST /switch-camera")) {
-                switchCamera()
-                output.write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nCamera switched".toByteArray())
-                return
-            }
-
-            // Stream MJPEG for /stream
-            if (request.startsWith("GET /stream")) {
-                val responseHeader = "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n" +
-                        "Connection: keep-alive\r\n\r\n"
-                output.write(responseHeader.toByteArray())
-                output.flush()
-
-                var frameSent = false
-                while (isRunning && !socket.isClosed) {
                     synchronized(lock) {
                         val frame = latestFrame
                         if (frame != null) {
-                            val frameHeader = "--frame\r\n" +
-                                    "Content-Type: image/jpeg\r\n" +
-                                    "Content-Length: ${frame.size}\r\n\r\n"
-                            output.write(frameHeader.toByteArray())
-                            output.write(frame)
-                            output.write("\r\n".toByteArray())
-                            output.flush()
-                            frameSent = true
-                        } else if (!frameSent) {
-                            Log.w(TAG, "Waiting for first frame...")
+                            uploadFrame(frame)
                         }
                     }
                     Thread.sleep(100) // ~10 fps
                 }
-                try { socket.close() } catch (e: Exception) {}
-                return
+            } catch (e: Exception) {
+                Log.e(TAG, "Frame uploader error", e)
             }
+        }.start()
+    }
 
-            // Serve HTML page for GET / (or any other path)
-            val html = """
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Camera Stream</title>
-                    <meta name="viewport" content="width=device-width, initial-scale=1">
-                    <style>
-                        body { font-family: sans-serif; text-align: center; margin: 20px; }
-                        img { max-width: 100%; height: auto; border: 1px solid #ccc; }
-                        button { padding: 10px 20px; font-size: 16px; cursor: pointer; margin-top: 20px; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Camera Stream</h1>
-                    <img src="/stream" alt="Camera Stream">
-                    <br>
-                    <button onclick="switchCamera()">Switch Camera</button>
-                    <script>
-                        function switchCamera() {
-                            fetch('/switch-camera', { method: 'POST' })
-                                .then(r => r.text())
-                                .then(msg => console.log(msg))
-                                .catch(e => console.error(e));
-                        }
-                    </script>
-                </body>
-                </html>
-            """.trimIndent()
-            val responseHeader = "HTTP/1.1 200 OK\r\n" +
-                    "Content-Type: text/html; charset=utf-8\r\n" +
-                    "Content-Length: ${html.length}\r\n" +
-                    "Connection: close\r\n\r\n"
-            output.write(responseHeader.toByteArray())
-            output.write(html.toByteArray())
+    private fun uploadFrame(frame: ByteArray) {
+        try {
+            val url = URL(RELAY_URL)
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "image/jpeg")
+            conn.setRequestProperty("Content-Length", frame.size.toString())
+            conn.doOutput = true
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            conn.outputStream.write(frame)
+            conn.outputStream.flush()
+            
+            // Check response for commands (e.g., "switch")
+            val responseCode = conn.responseCode
+            val response = conn.inputStream.reader().readText()
+            Log.d(TAG, "Upload response: $responseCode, body: $response")
+            
+            if (response.trim() == "switch") {
+                switchCamera()
+            }
+            
+            conn.disconnect()
         } catch (e: Exception) {
-            Log.e(TAG, "Client handling error", e)
-        } finally {
-            try { socket.close() } catch (e: Exception) {}
+            Log.e(TAG, "Upload failed", e)
         }
     }
 
@@ -336,7 +275,6 @@ class CameraService : Service() {
         Log.d(TAG, "onDestroy")
         super.onDestroy()
         isRunning = false
-        try { serverSocket?.close() } catch (e: Exception) {}
         captureSession?.close()
         cameraDevice?.close()
         imageReader?.close()

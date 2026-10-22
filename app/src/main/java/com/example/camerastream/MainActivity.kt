@@ -85,7 +85,7 @@ class MainActivity : AppCompatActivity() {
         btnStart.isEnabled = false
         btnStop.isEnabled = true
         tvStatus.text = "Stream Active"
-        updateIpAddress()
+        updateRelayUrl()
     }
 
     private fun stopCameraService() {
@@ -95,25 +95,7 @@ class MainActivity : AppCompatActivity() {
         tvStatus.text = "Stream Stopped"
     }
 
-    private fun updateIpAddress() {
-        val ip = getLocalIpAddress()
-        tvIpAddress.text = "Open in PC browser:\nhttp://$ip:8080/stream"
-    }
-
-    private fun getLocalIpAddress(): String {
-        try {
-            for (iface in java.net.NetworkInterface.getNetworkInterfaces()) {
-                if (iface.isUp && !iface.isLoopback) {
-                    for (addr in iface.inetAddresses) {
-                        if (addr is java.net.Inet4Address) {
-                            return addr.hostAddress
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return "IP not found"
+    private fun updateRelayUrl() {
+        tvIpAddress.text = "Open in PC browser:\nhttps://your-app.onrender.com"
     }
 }
