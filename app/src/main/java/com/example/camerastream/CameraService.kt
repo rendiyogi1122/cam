@@ -99,8 +99,7 @@ class CameraService : Service() {
             
             val characteristics = cameraManager.getCameraCharacteristics(cameraId)
             val streamConfigMap = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            val size = streamConfigMap?.getOutputSizes(ImageFormat.YUV_420_888)?.firstOrNull() 
-                ?: Size(640, 480)
+            val size = Size(480, 360) // Force small res untuk upload cepat
 
             imageReader = ImageReader.newInstance(size.width, size.height, ImageFormat.YUV_420_888, 2).apply {
                 setOnImageAvailableListener({ reader ->
@@ -199,7 +198,7 @@ class CameraService : Service() {
 
         val out = ByteArrayOutputStream()
         android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, image.width, image.height, null).compressToJpeg(
-            android.graphics.Rect(0, 0, image.width, image.height), 80, out
+            android.graphics.Rect(0, 0, image.width, image.height), 50, out  // Quality lebih rendah, file lebih kecil
         )
         return out.toByteArray()
     }
