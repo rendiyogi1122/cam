@@ -23,6 +23,8 @@ import android.util.Size
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class CameraService : Service() {
     private val RELAY_URL = "https://camera-relay-k2yn.onrender.com/upload-frame"
@@ -35,6 +37,7 @@ class CameraService : Service() {
     private var currentCameraFacing: Int = CameraCharacteristics.LENS_FACING_BACK
     private val lock = Any()
     private var isRunning = false
+    private val uploader: ExecutorService = Executors.newSingleThreadExecutor()
     private val TAG = "CameraService"
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -166,6 +169,7 @@ class CameraService : Service() {
         }
     }
 
+    // ponytail: hapus rotasi dan double JPEG encode, rotasi di browser
     private fun yuvToJpeg(image: Image): ByteArray {
         val planes = image.planes
         val yBuffer = planes[0].buffer
@@ -197,18 +201,7 @@ class CameraService : Service() {
         android.graphics.YuvImage(nv21, android.graphics.ImageFormat.NV21, image.width, image.height, null).compressToJpeg(
             android.graphics.Rect(0, 0, image.width, image.height), 80, out
         )
-        val jpegBytes = out.toByteArray()
-
-        val bitmap = android.graphics.BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.size)
-        val matrix = android.graphics.Matrix().apply { postRotate(90f) }
-        val rotatedBitmap = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-        bitmap.recycle()
-
-        val rotatedOut = ByteArrayOutputStream()
-        rotatedBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, rotatedOut)
-        rotatedBitmap.recycle()
-
-        return rotatedOut.toByteArray()
+        return out.toByteArray()
     }
 
     private fun startFrameUploader() {
@@ -219,7 +212,8 @@ class CameraService : Service() {
                     synchronized(lock) {
                         val frame = latestFrame
                         if (frame != null) {
-                            uploadFrame(frame)
+                            // Upload async, tidak blok loop capture
+                            uploader.execute { uploadFrame(frame) }
                         }
                     }
                     Thread.sleep(100) // ~10 fps
@@ -237,22 +231,21 @@ class CameraService : Service() {
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "image/jpeg")
             conn.setRequestProperty("Content-Length", frame.size.toString())
+            conn.setRequestProperty("Connection", "keep-alive")
             conn.doOutput = true
             conn.connectTimeout = 5000
             conn.readTimeout = 5000
-            conn.outputStream.write(frame)
-            conn.outputStream.flush()
-            
+            conn.outputStream.use { it.write(frame) }
+
             // Check response for commands (e.g., "switch")
             val responseCode = conn.responseCode
-            val response = conn.inputStream.reader().readText()
+            val response = conn.inputStream.bufferedReader().use { it.readText() }
             Log.d(TAG, "Upload response: $responseCode, body: $response")
-            
+
             if (response.trim() == "switch") {
                 switchCamera()
             }
-            
-            conn.disconnect()
+            // Jangan disconnect: biarkan connection pool reuse socket (keep-alive)
         } catch (e: Exception) {
             Log.e(TAG, "Upload failed", e)
         }
@@ -275,6 +268,7 @@ class CameraService : Service() {
         Log.d(TAG, "onDestroy")
         super.onDestroy()
         isRunning = false
+        uploader.shutdown()
         captureSession?.close()
         cameraDevice?.close()
         imageReader?.close()
