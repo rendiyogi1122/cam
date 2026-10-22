@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import kotlin.random.Random
 
 class MainActivity : AppCompatActivity() {
     private lateinit var tvIpAddress: TextView
@@ -77,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Generate unique device ID (6 chars)
-        deviceId = (0..5).map { "0123456789ABCDEF"[Math.random().toInt() * 16] }.joinToString("")
+        deviceId = (0..5).map { "0123456789ABCDEF"[Random.nextInt(16)] }.joinToString("")
 
         val intent = Intent(this, CameraService::class.java).apply {
             putExtra("device_id", deviceId)
