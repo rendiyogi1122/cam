@@ -99,7 +99,7 @@ class CameraService : Service() {
             
             val characteristics = cameraManager.getCameraCharacteristics(cameraId)
             val streamConfigMap = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            val size = Size(480, 360) // Force small res untuk upload cepat
+            val size = Size(640, 480) // Standard res, upload lebih cepat dari auto
 
             imageReader = ImageReader.newInstance(size.width, size.height, ImageFormat.YUV_420_888, 2).apply {
                 setOnImageAvailableListener({ reader ->
