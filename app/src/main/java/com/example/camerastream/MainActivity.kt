@@ -96,6 +96,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateRelayUrl() {
-        tvIpAddress.text = "Open in PC browser:\nhttps://your-app.onrender.com"
+        tvIpAddress.text = "Open in PC browser:\nhttps://camera-relay-k2yn.onrender.com/stream"
     }
 }
