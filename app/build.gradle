@@ -15,6 +15,16 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Load Supabase config from local.properties (in app module folder)
+        def localProperties = new Properties()
+        def localPropertiesFile = file('local.properties')
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.withInputStream { localProperties.load(it) }
+        }
+
+        buildConfigField "String", "SUPABASE_URL", "\"${localProperties.getProperty('supabase.url', '')}\""
+        buildConfigField "String", "SUPABASE_KEY", "\"${localProperties.getProperty('supabase.key', '')}\""
     }
 
     compileOptions {
@@ -32,12 +42,20 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
+    buildFeatures {
+        buildConfig = true
+    }
 }
 
 dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    // Supabase PostgREST
+    implementation 'io.github.jan-tennert.supabase:postgrest-kt:2.3.1'
+    // HTTP client
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'

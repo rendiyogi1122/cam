@@ -1,0 +1,23 @@
+## Gradle
+.gradle
+build/
+!src/*/build/
+
+## IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+## Android Studio
+captures/
+.navigation/
+*.keystore
+
+## Local config
+local.properties
+*.log
+
+## Supabase config
+local.properties
+.env

@@ -1,0 +1,11 @@
+## This file must *NOT* be checked into Version Control Systems,
+# as it contains information specific to your local configuration.
+#
+# Location of the SDK. This is only used by Gradle.
+# For customization when using a Version Control System, please read the
+# header note.
+#sdk.dir=C\:\\Users\\YourUser\\AppData\\Local\\Android\\Sdk
+
+# Supabase Config (add your real values below)
+supabase.url=https://your-project-ref.supabase.co
+supabase.key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...your-anon-key
