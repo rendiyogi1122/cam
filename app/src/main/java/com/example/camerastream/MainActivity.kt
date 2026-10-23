@@ -96,8 +96,16 @@ class MainActivity : AppCompatActivity() {
         supabase.startStream(deviceId) { success, body ->
             if (success) {
                 Log.d("MainActivity", "Supabase startStream OK: $body")
+                runOnUiThread { 
+                    Toast.makeText(this, "✅ Stream started", Toast.LENGTH_SHORT).show()
+                    tvStatus.text = "Stream Active (DB OK)"
+                }
             } else {
                 Log.e("MainActivity", "Supabase startStream failed", body?.let { Throwable(it) })
+                runOnUiThread { 
+                    Toast.makeText(this, "❌ Start failed: $body", Toast.LENGTH_LONG).show()
+                    tvStatus.text = "Start Failed"
+                }
             }
         }
 
@@ -121,8 +129,14 @@ class MainActivity : AppCompatActivity() {
         supabase.stopStream(deviceId) { success, body ->
             if (success) {
                 Log.d("MainActivity", "Supabase stopStream OK: $body")
+                runOnUiThread { 
+                    Toast.makeText(this, "✅ Stream stopped", Toast.LENGTH_SHORT).show()
+                }
             } else {
                 Log.e("MainActivity", "Supabase stopStream failed", body?.let { Throwable(it) })
+                runOnUiThread { 
+                    Toast.makeText(this, "❌ Stop failed: $body", Toast.LENGTH_LONG).show()
+                }
             }
         }
 
