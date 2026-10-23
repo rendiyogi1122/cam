@@ -19,7 +19,7 @@ class SupabaseClient(
     private val key: String
 ) : SupabaseInterface {
     private val client = OkHttpClient()
-    private val json = MediaType.parse("application/json")
+    private val json = MediaType.Companion.get("application/json")
     private val supabaseUrl = url.removeSuffix("/")
 
     override fun startStream(deviceId: String, onResult: (Boolean, String?) -> Unit) {
