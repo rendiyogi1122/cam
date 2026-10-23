@@ -25,7 +25,7 @@ class SupabaseClient(
     override fun startStream(deviceId: String, onResult: (Boolean, String?) -> Unit) {
         val body = """{"device_id": "$deviceId", "status": "aktif"}"""
         val request = Request.Builder()
-            .url("$supabaseUrl/rest/v1/streams?count=none")
+            .url("$supabaseUrl/rest/v1/streams")
             .method("POST", body.toRequestBody(json))
             .addHeader("apikey", key)
             .addHeader("Content-Type", "application/json")
