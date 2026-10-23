@@ -16,9 +16,9 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
-        // Load Supabase config from local.properties (in app module folder)
+        // Load Supabase config from local.properties (in root project folder)
         def localProperties = new Properties()
-        def localPropertiesFile = file('local.properties')
+        def localPropertiesFile = rootProject.file('local.properties')
         if (localPropertiesFile.exists()) {
             localPropertiesFile.withInputStream { localProperties.load(it) }
         }
