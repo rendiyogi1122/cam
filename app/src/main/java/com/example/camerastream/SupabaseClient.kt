@@ -1,6 +1,12 @@
 package com.example.camerastream
 
-import okhttp3.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import okhttp3.toMediaType
 import java.io.IOException
 
 interface SupabaseInterface {
@@ -13,7 +19,7 @@ class SupabaseClient(
     private val key: String
 ) : SupabaseInterface {
     private val client = OkHttpClient()
-    private val json = MediaType.get("application/json")
+    private val json = "application/json".toMediaType()
     private val supabaseUrl = url.removeSuffix("/")
 
     override fun startStream(deviceId: String, onResult: (Boolean, String?) -> Unit) {
