@@ -1,5 +1,8 @@
 package com.example.camerastream
 
+import okhttp3.*
+import java.io.IOException
+
 interface SupabaseInterface {
     fun startStream(deviceId: String, onResult: (Boolean, String?) -> Unit)
     fun stopStream(deviceId: String, onResult: (Boolean, String?) -> Unit)
