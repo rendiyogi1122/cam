@@ -19,13 +19,14 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Setup Gradle 8.2
-      uses: gradle/actions/setup-gradle@v3
-      with:
-        gradle-version: '8.2'
+    - name: Create local.properties from secrets
+      run: |
+        echo "supabase.url=${{ secrets.SUPABASE_URL }}" > local.properties
+        echo "supabase.key=${{ secrets.SUPABASE_KEY }}" >> local.properties
+        cat local.properties
 
     - name: Build APK
-      run: gradle assembleDebug
+      run: ./gradlew assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
