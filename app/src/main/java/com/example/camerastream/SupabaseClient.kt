@@ -1,9 +1,9 @@
 package com.example.camerastream
 
-import okhttp3.MediaType
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Response
@@ -19,14 +19,14 @@ class SupabaseClient(
     private val key: String
 ) : SupabaseInterface {
     private val client = OkHttpClient()
-    private val json = MediaType.Companion.get("application/json")
+    private val json = "application/json".toMediaType()
     private val supabaseUrl = url.removeSuffix("/")
 
     override fun startStream(deviceId: String, onResult: (Boolean, String?) -> Unit) {
         val body = """{"device_id": "$deviceId", "status": "aktif"}"""
         val request = Request.Builder()
             .url("$supabaseUrl/rest/v1/streams?count=none")
-            .method("POST", body.toRequestBody())
+            .method("POST", body.toRequestBody(json))
             .addHeader("apikey", key)
             .addHeader("Content-Type", "application/json")
             .build()
@@ -37,14 +37,12 @@ class SupabaseClient(
         val body = """{"status": "nonaktif"}"""
         val request = Request.Builder()
             .url("$supabaseUrl/rest/v1/streams?device_id=eq.$deviceId")
-            .method("PATCH", body.toRequestBody())
+            .method("PATCH", body.toRequestBody(json))
             .addHeader("apikey", key)
             .addHeader("Content-Type", "application/json")
             .build()
         enqueue(request, onResult)
     }
-
-    private fun String.toRequestBody() = RequestBody.create(json, this)
 
     private fun enqueue(request: Request, onResult: (Boolean, String?) -> Unit) {
         client.newCall(request).enqueue(object : Callback {
