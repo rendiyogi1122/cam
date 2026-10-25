@@ -39,6 +39,7 @@ class SupabaseClient(
             .url("$supabaseUrl/rest/v1/streams?device_id=eq.$deviceId")
             .method("PATCH", body.toRequestBody(json))
             .addHeader("apikey", key)
+            .addHeader("Prefer", "return=minimal")
             .addHeader("Content-Type", "application/json")
             .build()
         enqueue(request, onResult)

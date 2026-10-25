@@ -115,16 +115,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopCameraService() {
-        supabase.stopStream(deviceId) { success, body ->
-            if (success) {
-                Log.d("MainActivity", "Supabase stopStream OK: $body")
-                runOnUiThread {
-                    Toast.makeText(this, "Stream stopped", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                Log.e("MainActivity", "Supabase stopStream failed", body?.let { Throwable(it) })
-                runOnUiThread {
-                    Toast.makeText(this, "Stop failed: $body", Toast.LENGTH_LONG).show()
+        val currentId = deviceId
+        if (currentId.isNotBlank()) {
+            supabase.stopStream(currentId) { success, body ->
+                if (success) {
+                    Log.d("MainActivity", "Supabase stopStream OK: $body")
+                    runOnUiThread {
+                        Toast.makeText(this, "Stream stopped", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Log.e("MainActivity", "Supabase stopStream failed", body?.let { Throwable(it) })
+                    runOnUiThread {
+                        Toast.makeText(this, "Stop failed: $body", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         }
