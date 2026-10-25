@@ -8,9 +8,8 @@
         <item name="colorSecondary">@color/colorPrimary</item>
         <item name="colorSecondaryVariant">@color/colorPrimary</item>
         <item name="colorOnSecondary">@color/colorOnPrimary</item>
-        <item name="colorBackground">@color/colorBackground</item>
         <item name="colorSurface">@color/colorSurface</item>
-        <item name="colorOnBackground">@color/colorOnSurface</item>
+        <item name="colorSurfaceVariant">@color/colorSurface</item>
         <item name="colorOnSurface">@color/colorOnSurface</item>
         <item name="colorOnSurfaceVariant">@color/colorOnSurfaceVariant</item>
         <item name="colorError">@color/colorError</item>
@@ -19,5 +18,7 @@
         <item name="android:navigationBarColor">@color/colorBackground</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:colorBackground">@color/colorBackground</item>
+        <item name="android:windowBackground">@color/colorBackground</item>
     </style>
 </resources>
