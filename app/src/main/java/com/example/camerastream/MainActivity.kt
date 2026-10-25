@@ -3,24 +3,24 @@ package com.example.camerastream
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
-import android.text.format.Formatter
 import android.util.Log
-import android.widget.Button
+import android.view.View
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.android.material.button.MaterialButton
 import kotlin.random.Random
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var tvIpAddress: TextView
     private lateinit var tvStatus: TextView
-    private lateinit var btnStart: Button
-    private lateinit var btnStop: Button
+    private lateinit var tvStreamUrl: TextView
+    private lateinit var linkArea: View
+    private lateinit var btnStart: MaterialButton
+    private lateinit var btnStop: MaterialButton
     private var deviceId: String = ""
     private lateinit var supabase: SupabaseInterface
 
@@ -28,8 +28,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        tvIpAddress = findViewById(R.id.tvIpAddress)
         tvStatus = findViewById(R.id.tvStatus)
+        tvStreamUrl = findViewById(R.id.tvStreamUrl)
+        linkArea = findViewById(R.id.linkArea)
         btnStart = findViewById(R.id.btnStart)
         btnStop = findViewById(R.id.btnStop)
 
@@ -39,19 +40,13 @@ class MainActivity : AppCompatActivity() {
         if (supabaseUrl.isNotBlank() && supabaseKey.isNotBlank()) {
             supabase = SupabaseClient(supabaseUrl, supabaseKey)
         } else {
-            // Fallback: dummy client that does nothing (for dev without config)
             supabase = DummySupabaseClient()
         }
 
         checkPermissions()
 
-        btnStart.setOnClickListener {
-            startCameraService()
-        }
-
-        btnStop.setOnClickListener {
-            stopCameraService()
-        }
+        btnStart.setOnClickListener { startCameraService() }
+        btnStop.setOnClickListener { stopCameraService() }
     }
 
     private fun checkPermissions() {
@@ -83,7 +78,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCameraService() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) 
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Grant camera permission first", Toast.LENGTH_SHORT).show()
             return
@@ -96,15 +91,13 @@ class MainActivity : AppCompatActivity() {
         supabase.startStream(deviceId) { success, body ->
             if (success) {
                 Log.d("MainActivity", "Supabase startStream OK: $body")
-                runOnUiThread { 
-                    Toast.makeText(this, "✅ Stream started", Toast.LENGTH_SHORT).show()
-                    tvStatus.text = "Stream Active (DB OK)"
+                runOnUiThread {
+                    Toast.makeText(this, "Stream started", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 Log.e("MainActivity", "Supabase startStream failed", body?.let { Throwable(it) })
-                runOnUiThread { 
-                    Toast.makeText(this, "❌ Start failed: $body", Toast.LENGTH_LONG).show()
-                    tvStatus.text = "Start Failed"
+                runOnUiThread {
+                    Toast.makeText(this, "Start failed: $body", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -118,40 +111,42 @@ class MainActivity : AppCompatActivity() {
             startService(intent)
         }
 
-        btnStart.isEnabled = false
-        btnStop.isEnabled = true
-        tvStatus.text = "Stream Active"
-        updateRelayUrl()
+        updateUIStreamStarted()
     }
 
     private fun stopCameraService() {
-        // Notify Supabase: stop stream
         supabase.stopStream(deviceId) { success, body ->
             if (success) {
                 Log.d("MainActivity", "Supabase stopStream OK: $body")
-                runOnUiThread { 
-                    Toast.makeText(this, "✅ Stream stopped", Toast.LENGTH_SHORT).show()
+                runOnUiThread {
+                    Toast.makeText(this, "Stream stopped", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 Log.e("MainActivity", "Supabase stopStream failed", body?.let { Throwable(it) })
-                runOnUiThread { 
-                    Toast.makeText(this, "❌ Stop failed: $body", Toast.LENGTH_LONG).show()
+                runOnUiThread {
+                    Toast.makeText(this, "Stop failed: $body", Toast.LENGTH_LONG).show()
                 }
             }
         }
 
         stopService(Intent(this, CameraService::class.java))
-        btnStart.isEnabled = true
-        btnStop.isEnabled = false
-        tvStatus.text = "Stream Stopped"
+        updateUIStreamStopped()
         deviceId = ""
     }
 
-    private fun updateRelayUrl() {
-        if (deviceId.isNotEmpty()) {
-            tvIpAddress.text = "Open in PC browser:\nhttps://camera-relay-k2yn.onrender.com/stream/$deviceId"
-        } else {
-            tvIpAddress.text = "Open in PC browser:\nhttps://camera-relay-k2yn.onrender.com/stream"
-        }
+    private fun updateUIStreamStarted() {
+        tvStatus.text = "Stream Started"
+        val url = "https://camera-relay-k2yn.onrender.com/stream/$deviceId"
+        tvStreamUrl.text = url
+        linkArea.visibility = View.VISIBLE
+        btnStart.isEnabled = false
+        btnStop.isEnabled = true
+    }
+
+    private fun updateUIStreamStopped() {
+        tvStatus.text = "Stream Stopped"
+        linkArea.visibility = View.GONE
+        btnStart.isEnabled = true
+        btnStop.isEnabled = false
     }
 }

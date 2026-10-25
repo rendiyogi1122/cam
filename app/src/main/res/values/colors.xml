@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light minimal design tokens matched with simulator UI -->
+    <color name="colorBackground">#FFFFFF</color>
+    <color name="colorSurface">#FFFFFF</color>
+    <color name="colorHeaderBackground">#000000</color>
+    <color name="colorHeaderTitle">#FFFFFF</color>
+    <color name="colorPrimary">#000000</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+    <color name="colorOnSurface">#000000</color>
+    <color name="colorOnSurfaceVariant">#000000</color>
+    <color name="colorBtnHover">#333333</color>
+    <color name="colorError">#EF4444</color>
+    <color name="colorOnError">#FFFFFF</color>
+</resources>
